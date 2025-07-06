@@ -6,48 +6,61 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 
-# ====================================================== MODEL TRAINING PART ==========================================
-# ----- Load and prepare the data -----
+# --------------------- Load & Prepare Data --------------------- #
 data = pd.read_csv('Mall_Customers.csv')
-data.columns=['cid','gender','age','annule_income','spending']
+
+# Rename columns for clarity
+data.columns = ['cid', 'gender', 'age', 'annual_income', 'spending']
+
+# Encode gender: Female=0, Male=1
 encoder = LabelEncoder()
 data['gender'] = encoder.fit_transform(data['gender'])
 
-# ----- Feature Scaling -----
-x = data.iloc[:, :-1]
-scaler = StandardScaler().fit(x)
-x = scaler.transform(x)
-
-# ----- Create target variable -----
+# Create target: 1 if spending > median, else 0
 data['HighSpender'] = (data['spending'] > data['spending'].median()).astype(int)
+
+# Select features (drop cid and raw spending)
+X = data[['gender', 'age', 'annual_income']]
 y = data['HighSpender']
 
-# ----- Split the data -----
-xtest, xtrain, ytest, ytrain = train_test_split(x, y, test_size=0.2, random_state=46)
+# Split into train/test
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=46
+)
 
-# ----- Train the classifier -----
+# Scale features
+scaler = StandardScaler().fit(X_train)
+X_train_scaled = scaler.transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Train classifier
 rf = RandomForestClassifier(n_estimators=100, random_state=46)
-rf.fit(xtrain, ytrain)
+rf.fit(X_train_scaled, y_train)
 
-# ====================================================== STREAMLIT UI START ==========================================
+# --------------------- Streamlit UI --------------------- #
 st.title("Mall Customer Spending Predictor")
 st.write("Enter customer details to predict whether they are a high spender")
 
-# ----- Create user inputs -----
-cid = st.number_input('Customer ID', min_value=1, value=101)
-gender_input = st.selectbox('Gender', options=['Male', 'Female'])
-gender = 1 if gender_input == 'Male' else 0  # Note: LabelEncoder used 1 for Male, 0 for Female
-age = st.slider('Age', min_value=10, max_value=100, value=30)
-annule_income = st.slider('Annual Income (K$)', min_value=10, max_value=150, value=60)
+# Optional: capture an ID just for display (not used by model)
+cid = st.number_input("Customer ID (optional)", min_value=1, value=101)
 
-# ----- Format the input for prediction -----
-input_data = pd.DataFrame([[cid, gender, age, annule_income]],
-                          columns=['cid', 'gender', 'age', 'annule_income'])
+gender_input = st.selectbox("Gender", ["Female", "Male"])
+gender = 1 if gender_input == "Male" else 0
 
-input_scaled = scaler.transform(input_data)
+age = st.slider("Age", min_value=10, max_value=100, value=30)
+annual_income = st.slider("Annual Income (K$)", min_value=10, max_value=150, value=60)
 
-# ----- Run prediction -----
+# When button is clicked, run prediction
 if st.button("Predict Spending Category"):
- prediction = rf.predict(input_scaled)
- result = "High Spender " if prediction[0] == 1 else "Low Spender "
- st.success(f"The customer is predicted to be a: **{result}**")
+    # Prepare and scale the input
+    input_df = pd.DataFrame(
+        [[gender, age, annual_income]],
+        columns=['gender', 'age', 'annual_income']
+    )
+    input_scaled = scaler.transform(input_df)
+
+    # Make prediction
+    pred = rf.predict(input_scaled)[0]
+    label = "High Spender" if pred == 1 else "Low Spender"
+
+    st.success(f"Customer {cid} is predicted to be a: **{label}**")
